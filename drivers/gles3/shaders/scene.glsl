@@ -1,4 +1,5 @@
 /* clang-format off */
+
 #[modes]
 
 mode_color =
@@ -28,6 +29,7 @@ RENDER_SHADOWS = false
 RENDER_SHADOWS_LINEAR = false
 SHADOW_MODE_PCF_5 = false
 SHADOW_MODE_PCF_13 = false
+SHADOW_MODE_ESM = false
 LIGHT_USE_PSSM2 = false
 LIGHT_USE_PSSM4 = false
 LIGHT_USE_PSSM_BLEND = false
@@ -551,6 +553,7 @@ out vec2 uv2_interp;
 out vec3 tangent_interp;
 out vec3 binormal_interp;
 #endif
+
 
 #ifndef RENDER_MOTION_VECTORS
 #ifdef USE_ADDITIVE_LIGHTING
@@ -1078,6 +1081,8 @@ void main() {
 
 /* Varyings */
 
+uniform highp float esm_exponent;
+
 #if defined(RENDER_MOTION_VECTORS)
 in highp vec4 clip_position;
 in highp vec4 prev_clip_position;
@@ -1335,7 +1340,11 @@ layout(std140) uniform DirectionalLights { // ubo:8
 
 #if defined(USE_ADDITIVE_LIGHTING) && (!defined(ADDITIVE_OMNI) && !defined(ADDITIVE_SPOT))
 // Directional shadows can be in the base pass or in the additive passes
+#ifdef SHADOW_MODE_ESM
+uniform highp sampler2D directional_shadow_atlas; //texunit:-3
+#else
 uniform highp sampler2DShadow directional_shadow_atlas; // texunit:-3
+#endif
 #endif // defined(USE_ADDITIVE_LIGHTING) && (!defined(ADDITIVE_OMNI) && !defined(ADDITIVE_SPOT))
 
 #endif // !DISABLE_LIGHT_DIRECTIONAL || USE_SUN_SCATTER
@@ -1490,6 +1499,16 @@ float sample_shadow(highp sampler2DShadow shadow, float shadow_pixel_size, vec4 
 
 	return avg;
 }
+
+#ifdef SHADOW_MODE_ESM
+float sample_shadow_esm(highp sampler2D esm, vec4 pos) {
+	vec3 ndc = pos.xyz / pos.w;
+	float e = textureLod(esm, ndc.xy, 0.0).r;
+	//reversed depth: ndc.z == 1 near the light. Lit when receiver nearer than stored occluder
+	return clamp(e * exp(esm_exponent * ndc.z), 0.0, 1.0);
+}
+#endif
+
 #endif //!defined(ADDITIVE_OMNI)
 #endif // USE_ADDITIVE_LIGHTING
 
@@ -1546,6 +1565,7 @@ ivec2 multiview_uv(ivec2 uv) {
 	return uv;
 }
 #endif
+
 
 uniform mediump float opaque_prepass_threshold;
 #endif // !RENDER_MOTION_VECTORS
@@ -2954,7 +2974,11 @@ void main() {
 	// Linearize the depth buffer if rendering cubemap shadows.
 	gl_FragDepth = (scene_data_block.data.z_far - (length(vertex) + scene_data_block.data.shadow_bias)) / scene_data_block.data.z_far;
 #endif
-
+#ifdef SHADOW_MODE_ESM
+	//Reversed-Z: gl_FragCoord.z is 1.0 at the light, 0.0 at the far plane.
+	//Negative exponent => value <= 1, no float overflow
+	frag_color = vec4(exp(-esm_exponent * gl_FragCoord.z), 0.0, 0.0, 1.0);
+#endif
 // Nothing happens, so a tree-ssa optimizer will result in no fragment shader :)
 #else // !MODE_RENDER_DEPTH
 
@@ -3047,7 +3071,11 @@ void main() {
 
 // Orthogonal shadows
 #if !defined(LIGHT_USE_PSSM2) && !defined(LIGHT_USE_PSSM4)
+#ifdef SHADOW_MODE_ESM
+		directional_shadow = sample_shadow_esm(directional_shadow_atlas, shadow_coord);
+#else
 		directional_shadow = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord);
+#endif
 #endif // !defined(LIGHT_USE_PSSM2) && !defined(LIGHT_USE_PSSM4)
 
 // PSSM2 shadows
@@ -3055,8 +3083,17 @@ void main() {
 		float depth_z = -vertex.z;
 		vec4 light_split_offsets = directional_shadows[directional_shadow_index].shadow_split_offsets;
 		//take advantage of prefetch
+#ifdef SHADOW_MODE_ESM
+		float shadow1 = sample_shadow_esm(directional_shadow_atlas, shadow_coord);
+#else
 		float shadow1 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord);
+#endif
+
+#ifdef SHADOW_MODE_ESM
+		float shadow2 = sample_shadow_esm(directional_shadow_atlas, shadow_coord2);
+#else
 		float shadow2 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord2);
+#endif
 
 		if (depth_z < light_split_offsets.y) {
 
@@ -3091,10 +3128,29 @@ void main() {
 		float depth_z = -vertex.z;
 		vec4 light_split_offsets = directional_shadows[directional_shadow_index].shadow_split_offsets;
 
+#ifdef SHADOW_MODE_ESM
+		float shadow1 = sample_shadow_esm(directional_shadow_atlas, shadow_coord);
+#else
 		float shadow1 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord);
+#endif
+
+#ifdef SHADOW_MODE_ESM
+		float shadow2 = sample_shadow_esm(directional_shadow_atlas, shadow_coord2);
+#else
 		float shadow2 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord2);
+#endif
+
+#ifdef SHADOW_MODE_ESM
+		float shadow3 = sample_shadow_esm(directional_shadow_atlas, shadow_coord3);
+#else
 		float shadow3 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord3);
+#endif
+
+#ifdef SHADOW_MODE_ESM
+		float shadow4 = sample_shadow_esm(directional_shadow_atlas, shadow_coord4);
+#else
 		float shadow4 = sample_shadow(directional_shadow_atlas, directional_shadows[directional_shadow_index].shadow_atlas_pixel_size, shadow_coord4);
+#endif
 
 		if (depth_z < light_split_offsets.w) {
 #ifdef LIGHT_USE_PSSM_BLEND
