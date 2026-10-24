@@ -295,7 +295,6 @@ private:
 	struct DirectionalShadow {
 		GLuint depth = 0;
 		GLuint fbo = 0;
-		GLuint esm_texture = 0;
 
 		int light_count = 0;
 		int size = 0;
@@ -933,10 +932,6 @@ public:
 
 	_FORCE_INLINE_ GLuint direction_shadow_get_fb() {
 		return directional_shadow.fbo;
-	}
-
-	_FORCE_INLINE_ GLuint directional_shadow_get_esm_texture() {
-		return directional_shadow.esm_texture;
 	}
 
 	_FORCE_INLINE_ void directional_shadow_increase_current_light() {

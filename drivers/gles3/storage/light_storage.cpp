@@ -1736,44 +1736,22 @@ void LightStorage::update_directional_shadow_atlas() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, esm_enabled ? GL_NONE : GL_COMPARE_REF_TO_TEXTURE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_GREATER);
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
-
-		if (esm_enabled && directional_shadow.fbo != 0 && directional_shadow.esm_texture == 0) {
-			glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
-
-			glGenTextures(1, &directional_shadow.esm_texture);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, directional_shadow.esm_texture);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, directional_shadow.size, directional_shadow.size, 0, GL_RED, GL_FLOAT, nullptr);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, directional_shadow.esm_texture, 0);
-		} else if (!esm_enabled && directional_shadow.esm_texture != 0) {
-			glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-			glDeleteTextures(1, &directional_shadow.esm_texture);
-		}
 	}
 
 	glUseProgram(0);
 	glDepthMask(GL_TRUE);
 	glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
-	if (esm_enabled) {
-		GLenum bufs[1] = { GL_COLOR_ATTACHMENT0 };
-		glDrawBuffers(1, bufs);
-		glColorMask(1, 1, 1, 1);
-		glClearColor(1, 1, 1, 1);
-		RasterizerUtilGLES3::clear_depth(0.0);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	} else {
-		RasterizerUtilGLES3::clear_depth(0.0);
-		glClear(GL_DEPTH_BUFFER_BIT);
-	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, esm_enabled ? GL_NONE : GL_COMPARE_REF_TO_TEXTURE);
+
+	RasterizerUtilGLES3::clear_depth(0.0);
+	glClear(GL_DEPTH_BUFFER_BIT);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, GLES3::TextureStorage::system_fbo);
@@ -1794,8 +1772,6 @@ void LightStorage::directional_shadow_atlas_set_size(int p_size, bool p_16_bits)
 		directional_shadow.depth = 0;
 		glDeleteFramebuffers(1, &directional_shadow.fbo);
 		directional_shadow.fbo = 0;
-		glDeleteTextures(1, &directional_shadow.esm_texture);
-		directional_shadow.esm_texture = 0;
 	}
 }
 

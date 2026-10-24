@@ -2405,22 +2405,11 @@ void RasterizerSceneGLES3::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	scene_state.enable_gl_depth_draw(true);
 	scene_state.set_gl_depth_func(GL_GREATER);
 
-	static bool use_esm = light_storage->directional_shadow_get_use_esm();
-	if (use_esm && light_storage->light_get_type(base) == RSE::LIGHT_DIRECTIONAL) {
-		glColorMask(1, 0, 0, 0);
-		GLenum bufs[1] = { GL_COLOR_ATTACHMENT0 };
-		glDrawBuffers(1, bufs);
-		RasterizerUtilGLES3::clear_depth(0.0);
-		if (needs_clear) {
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		}
-	} else {
-		glColorMask(0, 0, 0, 0);
-		glDrawBuffers(0, nullptr);
-		RasterizerUtilGLES3::clear_depth(0.0);
-		if (needs_clear) {
-			glClear(GL_DEPTH_BUFFER_BIT);
-		}
+	glColorMask(0, 0, 0, 0);
+	glDrawBuffers(0, nullptr);
+	RasterizerUtilGLES3::clear_depth(0.0);
+	if (needs_clear) {
+		glClear(GL_DEPTH_BUFFER_BIT);
 	}
 
 	uint64_t spec_constant_base_flags = SceneShaderGLES3::DISABLE_LIGHTMAP |
@@ -2433,10 +2422,6 @@ void RasterizerSceneGLES3::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 
 	if (light_storage->light_get_type(base) == RSE::LIGHT_OMNI) {
 		spec_constant_base_flags |= SceneShaderGLES3::RENDER_SHADOWS_LINEAR;
-	}
-
-	if (use_esm && light_storage->light_get_type(base) == RSE::LIGHT_DIRECTIONAL) {
-		spec_constant_base_flags |= SceneShaderGLES3::SHADOW_MODE_ESM;
 	}
 
 	RenderListParameters render_list_params(render_list[RENDER_LIST_SECONDARY].elements.ptr(), render_list[RENDER_LIST_SECONDARY].elements.size(), reverse_cull, spec_constant_base_flags, false);
@@ -3782,7 +3767,7 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 							spec_constants |= SceneShaderGLES3::LIGHT_USE_PSSM_BLEND;
 						}
 
-						bool use_esm = GLES3::LightStorage::get_singleton()->directional_shadow_get_use_esm() && GLES3::LightStorage::get_singleton()->directional_shadow_get_esm_texture() != 0;
+						bool use_esm = GLES3::LightStorage::get_singleton()->directional_shadow_get_use_esm();
 						if (use_esm) {
 							spec_constants |= SceneShaderGLES3::SHADOW_MODE_ESM;
 						} else if (scene_state.directional_shadow_quality >= RSE::SHADOW_QUALITY_SOFT_HIGH) {
@@ -3850,8 +3835,7 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 						uint32_t shadow_id = MAX_DIRECTIONAL_LIGHTS - 1 - (pass - int32_t(inst->light_passes.size()));
 						material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES3::DIRECTIONAL_SHADOW_INDEX, shadow_id, shader->version, instance_variant, spec_constants);
 
-						bool use_esm = GLES3::LightStorage::get_singleton()->directional_shadow_get_use_esm() && GLES3::LightStorage::get_singleton()->directional_shadow_get_esm_texture() != 0;
-						GLuint tex = use_esm ? GLES3::LightStorage::get_singleton()->directional_shadow_get_esm_texture() : GLES3::LightStorage::get_singleton()->directional_shadow_get_texture();
+						GLuint tex = GLES3::LightStorage::get_singleton()->directional_shadow_get_texture();
 						glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 3);
 						glBindTexture(GL_TEXTURE_2D, tex);
 
@@ -4467,7 +4451,7 @@ void RasterizerSceneGLES3::_render_buffers_debug_draw(Ref<RenderSceneBuffersGLES
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_GREEN);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_BLUE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ALPHA);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, light_storage->directional_shadow_get_use_esm() ? GL_NONE : GL_COMPARE_REF_TO_TEXTURE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_GREATER);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}

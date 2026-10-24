@@ -1503,9 +1503,8 @@ float sample_shadow(highp sampler2DShadow shadow, float shadow_pixel_size, vec4 
 #ifdef SHADOW_MODE_ESM
 float sample_shadow_esm(highp sampler2D esm, vec4 pos) {
 	vec3 ndc = pos.xyz / pos.w;
-	float e = textureLod(esm, ndc.xy, 0.0).r;
-	//reversed depth: ndc.z == 1 near the light. Lit when receiver nearer than stored occluder
-	return clamp(e * exp(esm_exponent * ndc.z), 0.0, 1.0);
+	float z_occ = textureLod(esm, ndc.xy, 0.0).r;
+	return clamp(exp(esm_exponent * (ndc.z - z_occ)), 0.0, 1.0);
 }
 #endif
 
@@ -2973,11 +2972,6 @@ void main() {
 #ifdef RENDER_SHADOWS_LINEAR
 	// Linearize the depth buffer if rendering cubemap shadows.
 	gl_FragDepth = (scene_data_block.data.z_far - (length(vertex) + scene_data_block.data.shadow_bias)) / scene_data_block.data.z_far;
-#endif
-#ifdef SHADOW_MODE_ESM
-	//Reversed-Z: gl_FragCoord.z is 1.0 at the light, 0.0 at the far plane.
-	//Negative exponent => value <= 1, no float overflow
-	frag_color = vec4(exp(-esm_exponent * gl_FragCoord.z), 0.0, 0.0, 1.0);
 #endif
 // Nothing happens, so a tree-ssa optimizer will result in no fragment shader :)
 #else // !MODE_RENDER_DEPTH
