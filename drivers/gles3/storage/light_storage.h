@@ -303,6 +303,9 @@ private:
 		int current_light = 0;
 	} directional_shadow;
 
+	bool esm_enabled = false;
+	float esm_exponent = 40.0;
+
 public:
 	static LightStorage *get_singleton();
 
@@ -909,6 +912,16 @@ public:
 
 	Rect2i get_directional_shadow_rect();
 	void update_directional_shadow_atlas();
+
+	void directional_shadow_update_esm_settings();
+
+	_FORCE_INLINE_ bool directional_shadow_get_use_esm() const {
+		return esm_enabled;
+	}
+
+	_FORCE_INLINE_ float directional_shadow_get_esm_exponent() const {
+		return esm_exponent;
+	}
 
 	_FORCE_INLINE_ GLuint directional_shadow_get_texture() {
 		return directional_shadow.depth;

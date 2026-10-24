@@ -1711,10 +1711,13 @@ void LightStorage::shadow_atlas_update(RID p_atlas) {
 
 /* DIRECTIONAL SHADOW */
 
+void LightStorage::directional_shadow_update_esm_settings() {
+	esm_enabled = GLOBAL_GET("rendering/lights_and_shadows/use_exponential_shadow_maps");
+	esm_exponent = (float)GLOBAL_GET("rendering/lights_and_shadows/esm_darkness_factor");
+}
+
 // Create if necessary and clear.
 void LightStorage::update_directional_shadow_atlas() {
-	static bool use_esm = GLOBAL_GET("rendering/lights_and_shadows/use_exponential_shadow_maps");
-
 	if (directional_shadow.depth == 0 && directional_shadow.size > 0) {
 		glGenFramebuffers(1, &directional_shadow.fbo);
 		glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
@@ -1738,7 +1741,9 @@ void LightStorage::update_directional_shadow_atlas() {
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
 
-		if (use_esm && directional_shadow.esm_texture == 0) {
+		if (esm_enabled && directional_shadow.fbo != 0 && directional_shadow.esm_texture == 0) {
+			glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
+
 			glGenTextures(1, &directional_shadow.esm_texture);
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, directional_shadow.esm_texture);
@@ -1748,13 +1753,17 @@ void LightStorage::update_directional_shadow_atlas() {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, directional_shadow.esm_texture, 0);
+		} else if (!esm_enabled && directional_shadow.esm_texture != 0) {
+			glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+			glDeleteTextures(1, &directional_shadow.esm_texture);
 		}
 	}
 
 	glUseProgram(0);
 	glDepthMask(GL_TRUE);
 	glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
-	if (use_esm) {
+	if (esm_enabled) {
 		GLenum bufs[1] = { GL_COLOR_ATTACHMENT0 };
 		glDrawBuffers(1, bufs);
 		glColorMask(1, 1, 1, 1);
